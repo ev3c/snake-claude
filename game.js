@@ -35,6 +35,7 @@ let score = 0;
 let highScore = localStorage.getItem('snakeHighScore') || 0;
 let gameRunning = false;
 let gameLoop;
+let autoPlay = false;
 
 // Elementos del DOM
 const scoreElement = document.getElementById('score');
@@ -44,6 +45,9 @@ const gameOverScreen = document.getElementById('gameOver');
 const startScreen = document.getElementById('startScreen');
 const startBtn = document.getElementById('startBtn');
 const restartBtn = document.getElementById('restartBtn');
+const autoPlayBtn = document.getElementById('autoPlayBtn');
+const toggleAutoPlayBtn = document.getElementById('toggleAutoPlay');
+const autoPlayText = document.getElementById('autoPlayText');
 const touchControls = document.querySelectorAll('.control-btn');
 
 // Actualizar puntuación alta
@@ -156,9 +160,121 @@ function drawGame() {
     ctx.fill();
 }
 
+// Algoritmo de autojuego usando BFS (Breadth-First Search)
+function autoPlayMove() {
+    const head = snake[0];
+    
+    // Posibles direcciones: arriba, derecha, abajo, izquierda
+    const directions = [
+        { dx: 0, dy: -1 },  // Arriba
+        { dx: 1, dy: 0 },   // Derecha
+        { dx: 0, dy: 1 },   // Abajo
+        { dx: -1, dy: 0 }   // Izquierda
+    ];
+    
+    // BFS para encontrar el camino más corto a la comida
+    const queue = [];
+    const visited = new Set();
+    const parent = new Map();
+    
+    queue.push({ x: head.x, y: head.y, path: [] });
+    visited.add(`${head.x},${head.y}`);
+    
+    let foundPath = null;
+    
+    while (queue.length > 0 && !foundPath) {
+        const current = queue.shift();
+        
+        // Si llegamos a la comida
+        if (current.x === food.x && current.y === food.y) {
+            foundPath = current.path;
+            break;
+        }
+        
+        // Explorar todas las direcciones
+        for (let dir of directions) {
+            let newX = current.x + dir.dx;
+            let newY = current.y + dir.dy;
+            
+            // Aplicar teletransporte
+            if (newX < 0) newX = TILE_COUNT - 1;
+            if (newX >= TILE_COUNT) newX = 0;
+            if (newY < 0) newY = TILE_COUNT - 1;
+            if (newY >= TILE_COUNT) newY = 0;
+            
+            const key = `${newX},${newY}`;
+            
+            // Verificar si es una posición válida
+            if (!visited.has(key)) {
+                // Verificar que no choque con el cuerpo (excepto la cola que se moverá)
+                let collision = false;
+                for (let i = 0; i < snake.length - 1; i++) {
+                    if (snake[i].x === newX && snake[i].y === newY) {
+                        collision = true;
+                        break;
+                    }
+                }
+                
+                if (!collision) {
+                    visited.add(key);
+                    const newPath = [...current.path, dir];
+                    queue.push({ x: newX, y: newY, path: newPath });
+                }
+            }
+        }
+    }
+    
+    // Si encontramos un camino, tomar el primer paso
+    if (foundPath && foundPath.length > 0) {
+        const nextMove = foundPath[0];
+        // Verificar que no sea un giro de 180 grados
+        if (!(nextMove.dx === -lastDirection.dx && nextMove.dy === -lastDirection.dy)) {
+            dx = nextMove.dx;
+            dy = nextMove.dy;
+        }
+    } else {
+        // Si no hay camino a la comida, intentar moverse de forma segura
+        for (let dir of directions) {
+            // No girar 180 grados
+            if (dir.dx === -lastDirection.dx && dir.dy === -lastDirection.dy) continue;
+            
+            let newX = head.x + dir.dx;
+            let newY = head.y + dir.dy;
+            
+            // Aplicar teletransporte
+            if (newX < 0) newX = TILE_COUNT - 1;
+            if (newX >= TILE_COUNT) newX = 0;
+            if (newY < 0) newY = TILE_COUNT - 1;
+            if (newY >= TILE_COUNT) newY = 0;
+            
+            // Verificar colisión
+            let safe = true;
+            for (let segment of snake) {
+                if (segment.x === newX && segment.y === newY) {
+                    safe = false;
+                    break;
+                }
+            }
+            
+            if (safe) {
+                dx = dir.dx;
+                dy = dir.dy;
+                break;
+            }
+        }
+    }
+    
+    lastDirection = { dx, dy };
+}
+
 // Actualizar el juego
 function update() {
     if (!gameRunning) return;
+    
+    // Si está en modo auto-juego, calcular el próximo movimiento
+    if (autoPlay) {
+        autoPlayMove();
+    }
     
     // Crear nueva cabeza
     const head = { x: snake[0].x + dx, y: snake[0].y + dy };
@@ -201,7 +317,7 @@ function update() {
 }
 
 // Iniciar el juego
-function startGame() {
+function startGame(autoMode = false) {
     snake = [
         { x: 15, y: 15 },
         { x: 14, y: 15 },
@@ -214,12 +330,38 @@ function startGame() {
     scoreElement.textContent = score;
     generateFood();
     gameRunning = true;
+    autoPlay = autoMode;
     startScreen.classList.add('hidden');
     gameOverScreen.classList.add('hidden');
+    
+    // Mostrar botón de toggle y actualizar estado
+    toggleAutoPlayBtn.style.display = 'flex';
+    updateAutoPlayButton();
     
     if (gameLoop) clearInterval(gameLoop);
     gameLoop = setInterval(update, 100);
     drawGame();
+}
+
+// Actualizar el botón de auto-juego
+function updateAutoPlayButton() {
+    if (autoPlay) {
+        toggleAutoPlayBtn.classList.add('active');
+        autoPlayText.textContent = 'AUTO ON';
+        canvas.style.cursor = 'default';
+    } else {
+        toggleAutoPlayBtn.classList.remove('active');
+        autoPlayText.textContent = 'AUTO OFF';
+        canvas.style.cursor = 'pointer';
+    }
+}
+
+// Toggle del modo auto-juego
+function toggleAutoPlay() {
+    if (!gameRunning) return;
+    
+    autoPlay = !autoPlay;
+    updateAutoPlayButton();
 }
 
 // Terminar el juego
@@ -228,13 +370,20 @@ function endGame() {
     clearInterval(gameLoop);
     finalScoreElement.textContent = score;
     gameOverScreen.classList.remove('hidden');
+    toggleAutoPlayBtn.style.display = 'none';
 }
 
 // Controles de teclado
 let lastDirection = { dx: 1, dy: 0 };
 
 document.addEventListener('keydown', (e) => {
-    if (!gameRunning) return;
+    // Alternar auto-juego con la tecla 'A'
+    if (e.key.toLowerCase() === 'a' && gameRunning) {
+        toggleAutoPlay();
+        return;
+    }
+    
+    if (!gameRunning || autoPlay) return; // Ignorar en modo auto-juego
     
     // Prevenir el cambio de dirección en 180 grados
     switch (e.key) {
@@ -274,7 +423,7 @@ document.addEventListener('keydown', (e) => {
 // Controles táctiles
 touchControls.forEach(button => {
     button.addEventListener('click', (e) => {
-        if (!gameRunning) return;
+        if (!gameRunning || autoPlay) return; // Ignorar en modo auto-juego
         
         const direction = e.target.dataset.direction;
         
@@ -317,15 +466,17 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Eventos de botones
-startBtn.addEventListener('click', startGame);
-restartBtn.addEventListener('click', startGame);
+startBtn.addEventListener('click', () => startGame(false));
+autoPlayBtn.addEventListener('click', () => startGame(true));
+restartBtn.addEventListener('click', () => startGame(autoPlay));
+toggleAutoPlayBtn.addEventListener('click', toggleAutoPlay);
 
 // Controles táctiles en el canvas
 canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
 canvas.addEventListener('click', handleCanvasClick);
 
 function handleTouchStart(e) {
-    if (!gameRunning) return;
+    if (!gameRunning || autoPlay) return; // Ignorar en modo auto-juego
     e.preventDefault();
     
     const touch = e.touches[0];
@@ -337,7 +488,7 @@ function handleTouchStart(e) {
 }
 
 function handleCanvasClick(e) {
-    if (!gameRunning) return;
+    if (!gameRunning || autoPlay) return; // Ignorar en modo auto-juego
     
     const rect = canvas.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
