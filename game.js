@@ -3,7 +3,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 // Configuración del juego
-const TILE_COUNT = 20;
+const TILE_COUNT = 30;
 let gridSize = 20;
 
 // Configurar tamaño del canvas
@@ -24,11 +24,11 @@ window.addEventListener('resize', () => {
 
 // Variables del juego
 let snake = [
-    { x: 10, y: 10 },
-    { x: 9, y: 10 },
-    { x: 8, y: 10 }
+    { x: 15, y: 15 },
+    { x: 14, y: 15 },
+    { x: 13, y: 15 }
 ];
-let food = { x: 15, y: 15 };
+let food = { x: 20, y: 15 };
 let dx = 1;
 let dy = 0;
 let score = 0;
@@ -203,9 +203,9 @@ function update() {
 // Iniciar el juego
 function startGame() {
     snake = [
-        { x: 10, y: 10 },
-        { x: 9, y: 10 },
-        { x: 8, y: 10 }
+        { x: 15, y: 15 },
+        { x: 14, y: 15 },
+        { x: 13, y: 15 }
     ];
     dx = 1; // Comenzar moviéndose hacia la derecha
     dy = 0;
@@ -319,6 +319,69 @@ window.addEventListener('keydown', (e) => {
 // Eventos de botones
 startBtn.addEventListener('click', startGame);
 restartBtn.addEventListener('click', startGame);
+
+// Controles táctiles en el canvas
+canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+canvas.addEventListener('click', handleCanvasClick);
+
+function handleTouchStart(e) {
+    if (!gameRunning) return;
+    e.preventDefault();
+    
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const touchX = touch.clientX - rect.left;
+    const touchY = touch.clientY - rect.top;
+    
+    changeDirectionBasedOnTouch(touchX, touchY);
+}
+
+function handleCanvasClick(e) {
+    if (!gameRunning) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    
+    changeDirectionBasedOnTouch(clickX, clickY);
+}
+
+function changeDirectionBasedOnTouch(touchX, touchY) {
+    // Obtener posición de la cabeza de la serpiente en píxeles
+    const headX = snake[0].x * gridSize + gridSize / 2;
+    const headY = snake[0].y * gridSize + gridSize / 2;
+    
+    // Calcular diferencias
+    const diffX = touchX - headX;
+    const diffY = touchY - headY;
+    
+    // Determinar dirección basada en la diferencia mayor
+    if (Math.abs(diffX) > Math.abs(diffY)) {
+        // Movimiento horizontal
+        if (diffX > 0 && lastDirection.dx !== -1) {
+            // Tocar a la derecha
+            dx = 1;
+            dy = 0;
+        } else if (diffX < 0 && lastDirection.dx !== 1) {
+            // Tocar a la izquierda
+            dx = -1;
+            dy = 0;
+        }
+    } else {
+        // Movimiento vertical
+        if (diffY > 0 && lastDirection.dy !== -1) {
+            // Tocar abajo
+            dx = 0;
+            dy = 1;
+        } else if (diffY < 0 && lastDirection.dy !== 1) {
+            // Tocar arriba
+            dx = 0;
+            dy = -1;
+        }
+    }
+    
+    lastDirection = { dx, dy };
+}
 
 // Dibujar pantalla inicial
 drawGame();
